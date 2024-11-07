@@ -20,17 +20,10 @@
 
 #include "name_sorting/name_sorting.hpp"
 #include <Eigen/Dense>
-#include "cnr_param/cnr_param.h"
-#include "cnr_logger/cnr_logger.h"
+
+#include "ssm_safety_ros/ssm_ros_base_node_library.h"
 
 using std::placeholders::_1;
-using namespace std::chrono_literals;
-
-//#include <moveit/planning_scene_interface/planning_scene_interface.h>
-
-/*TODO:
-- planning scene interface
-*/
 
 class RobotDescriptionNotifier
 {
@@ -317,18 +310,6 @@ int main(int argc, char * argv[])
   std::vector<std::string> joint_names = chain->getMoveableJointNames();
   size_t nAx=joint_names.size();
 
-  Eigen::VectorXd velocity_limits(nAx);
-  Eigen::VectorXd inv_velocity_limits(nAx);
-  Eigen::VectorXd upper_limits(nAx);
-  Eigen::VectorXd lower_limits(nAx);
-  for (size_t iAx=0; iAx<nAx; iAx++)
-  {
-    upper_limits(iAx)    = model->getJoint(joint_names.at(iAx))->limits->upper;
-    lower_limits(iAx)    = model->getJoint(joint_names.at(iAx))->limits->lower;
-    velocity_limits(iAx) = model->getJoint(joint_names.at(iAx))->limits->velocity;
-    inv_velocity_limits(iAx) = 1./model->getJoint(joint_names.at(iAx))->limits->velocity;
-  }
-
   // Loading links to test for ssm
 
   std::vector<std::string> test_links = chain->getLinksName();
@@ -360,9 +341,6 @@ int main(int argc, char * argv[])
   RCLCPP_INFO(node->get_logger(), "measure_human_speed: %d", measure_human_speed);
 
   // publishers and subscribers
-
-  rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr obstacle_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr js_sub_;
 
   rclcpp::Publisher<std_msgs::msg::Int16>::SharedPtr ovr_pb = node->create_publisher<std_msgs::msg::Int16>("/speed_ovr",1);
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr ovr_float_pb = node->create_publisher<std_msgs::msg::Float32>("/speed_ovr_float",1);
@@ -405,7 +383,7 @@ int main(int argc, char * argv[])
   ovr_msg.data = 0;
   double last_ovr = 0;
 
-  std::string pose_frame_id;
+  // std::string pose_frame_id;
 
   int iter = 0;
   rclcpp::Time last_pose_topic = rclcpp::Time(0);
@@ -570,12 +548,12 @@ int main(int argc, char * argv[])
     ovr_float_pb->publish(msg_float);
     RCLCPP_DEBUG(node->get_logger(), "ovr = %hd", ovr_msg.data);
 
-    msg_float.data=ssm.getDistanceFromClosestPoint();
-    dist_pb->publish(msg_float);
-
     std_msgs::msg::Float64 msg_float64;
     msg_float64.data=ovr_msg.data;
     ovr_float64_pb->publish(msg_float64);
+
+    msg_float.data=ssm.getDistanceFromClosestPoint();
+    dist_pb->publish(msg_float);
 
     msg_float64.data=ssm.getDistanceFromClosestPoint();
     dist_float64_pb->publish(msg_float64);

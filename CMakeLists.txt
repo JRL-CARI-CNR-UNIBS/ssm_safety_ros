@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(ssm_safety_ros)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-funroll-loops -Wall -Ofast)
+  add_compile_options(-funroll-loops -Wall -Ofast -Wpedantic)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -17,67 +17,133 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 find_package(name_sorting REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(trajectory_msgs REQUIRED)
 find_package(rdyn_core REQUIRED)
 find_package(Eigen3 REQUIRED COMPONENTS Core)
-find_package(cnr_param REQUIRED)
-find_package(cnr_logger REQUIRED)
 find_package(velocity_scaling_iso15066 REQUIRED)
-
-
 #tf_conversions
 #moveit_ros_planning_interface
 
-include_directories(
-   #include
-   ${EIGEN3_INCLUDE_DIRS}
-   ${rdyn_core_INCLUDE_DIRS}
- )
+#include_directories(
+#   include
+#   ${EIGEN3_INCLUDE_DIRS}
+#   ${rdyn_core_INCLUDE_DIRS}
+#)
 
-
-
-add_executable(velocity_scaling_iso_15066_node src/velocity_scaling_iso_15066_node.cpp)
-
-ament_target_dependencies(velocity_scaling_iso_15066_node PUBLIC
+# CREATE PKG LIBRARY
+add_library(${PROJECT_NAME} 
+    src/${PROJECT_NAME}/ssm_ros_base_node_library.cpp
+    src/${PROJECT_NAME}/ssm_ros_dynamic_node_library.cpp
+    )
+ament_target_dependencies(${PROJECT_NAME}
     rclcpp
     tf2_ros
+    tf2_eigen
     std_msgs
     geometry_msgs 
-    sensor_msgs 
-    name_sorting 
-    #trajectory_msgs 
-    tf2_eigen
+    sensor_msgs
+    trajectory_msgs
+    name_sorting
 )
-
-target_link_libraries(velocity_scaling_iso_15066_node PUBLIC 
-    #rclcpp
-    ${tf2_ros_LIBRARIES}
-    #tf2_ros
-    ${std_msgs_LIBRARIES}
-    #std_msgs 
-    #geometry_msgs 
-    ${geometry_msgs_LIBRARIES}
-    #sensor_msgs 
-    #name_sorting 
-    ${name_sorting_LIBRARIES}
-    #trajectory_msgs 
+target_include_directories(${PROJECT_NAME}
+    PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+    )
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(
+    rclcpp
+    rclcpp_components
+    tf2_ros
+    tf2_eigen
+    geometry_msgs
+    sensor_msgs
+    trajectory_msgs
+    name_sorting
+    std_msgs
+    rdyn_core
+    Eigen3
+    velocity_scaling_iso15066
+    )
+target_link_libraries(${PROJECT_NAME}
     Eigen3::Eigen
     rdyn_core::rdyn_core
-    cnr_param::cnr_param
-    cnr_logger::cnr_logger
     velocity_scaling_iso15066::velocity_scaling_iso15066
+    )
+
+install(
+  DIRECTORY include/${PROJECT_NAME}
+  DESTINATION include
+)
+install(
+  TARGETS ${PROJECT_NAME}
+  EXPORT export_${PROJECT_NAME}
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
 )
 
-target_compile_features(velocity_scaling_iso_15066_node PUBLIC c_std_99 cxx_std_17)  
-target_include_directories(velocity_scaling_iso_15066_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+
+## OLD NODE
+#add_executable(velocity_scaling_iso_15066_node src/velocity_scaling_iso_15066_node.cpp)
+#ament_target_dependencies(velocity_scaling_iso_15066_node PUBLIC
+#    rclcpp
+#    tf2_ros
+#    std_msgs
+#    geometry_msgs 
+#    sensor_msgs 
+#    name_sorting 
+#    tf2_eigen
+#)
+#target_link_libraries(velocity_scaling_iso_15066_node PUBLIC 
+#    ${tf2_ros_LIBRARIES}
+#    ${std_msgs_LIBRARIES}
+#    ${geometry_msgs_LIBRARIES}
+#    ${name_sorting_LIBRARIES}
+#    Eigen3::Eigen
+#    rdyn_core::rdyn_core
+#    velocity_scaling_iso15066::velocity_scaling_iso15066
+#)
+#target_compile_features(velocity_scaling_iso_15066_node PUBLIC c_std_99 cxx_std_17)  
+#target_include_directories(velocity_scaling_iso_15066_node PUBLIC
+#  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#  $<INSTALL_INTERFACE:include>)
+#install(TARGETS velocity_scaling_iso_15066_node
+#  DESTINATION lib/${PROJECT_NAME})
+
+# NEW NODE
 
 
-install(TARGETS velocity_scaling_iso_15066_node
-  DESTINATION lib/${PROJECT_NAME})
+add_executable(ssm_iso_15066_node_v2
+    src/ssm_iso_15066_node_v2.cpp
+    src/${PROJECT_NAME}/ssm_ros_dynamic_node_library.cpp
+    src/${PROJECT_NAME}/ssm_ros_base_node_library.cpp
+    )
+ament_target_dependencies(ssm_iso_15066_node_v2
+    rclcpp
+    )
+target_link_libraries(ssm_iso_15066_node_v2
+    ${PROJECT_NAME}
+    )
+target_include_directories(ssm_iso_15066_node_v2 PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+target_compile_features(ssm_iso_15066_node_v2 PUBLIC c_std_99 cxx_std_17)
+install(TARGETS ssm_iso_15066_node_v2
+    DESTINATION lib/${PROJECT_NAME})
+
+#target_link_libraries(ssm_iso_15066_node_v2 velocity_scaling_iso15066::velocity_scaling_iso15066)
+ament_target_dependencies(ssm_iso_15066_node_v2 rclcpp)
+target_compile_features(ssm_iso_15066_node_v2 PUBLIC c_std_99 cxx_std_17)  
+#target_include_directories(ssm_iso_15066_node_v2 PUBLIC
+#  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#  $<INSTALL_INTERFACE:include>)
+#install(TARGETS ssm_iso_15066_node_v2
+#  DESTINATION lib/${PROJECT_NAME})
+
 
 install(DIRECTORY launch config
     DESTINATION share/${PROJECT_NAME})
