@@ -33,7 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <Eigen/Dense>
 #include "sensor_msgs/msg/joint_state.hpp"
 
-//#include <rdyn_core/primitives.h>
+#include <rdyn_core/primitives.h>
 #include <urdf_model/model.h>
 #include <urdf_parser/urdf_parser.h>
 #include <std_msgs/msg/string.hpp>

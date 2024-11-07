@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(ssm_safety_ros)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-funroll-loops -Wall -Ofast -Wpedantic)
+  add_compile_options(-funroll-loops -Wall -Ofast)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -33,7 +33,7 @@ find_package(velocity_scaling_iso15066 REQUIRED)
 #)
 
 # CREATE PKG LIBRARY
-add_library(${PROJECT_NAME} 
+add_library(${PROJECT_NAME} SHARED
     src/${PROJECT_NAME}/ssm_ros_base_node_library.cpp
     src/${PROJECT_NAME}/ssm_ros_dynamic_node_library.cpp
     )
@@ -50,7 +50,7 @@ ament_target_dependencies(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME}
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
     )
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_dependencies(
@@ -74,10 +74,6 @@ target_link_libraries(${PROJECT_NAME}
     )
 
 install(
-  DIRECTORY include/${PROJECT_NAME}
-  DESTINATION include
-)
-install(
   TARGETS ${PROJECT_NAME}
   EXPORT export_${PROJECT_NAME}
   LIBRARY DESTINATION lib
@@ -85,7 +81,10 @@ install(
   RUNTIME DESTINATION bin
   INCLUDES DESTINATION include
 )
-
+install(
+  DIRECTORY include/
+  DESTINATION include/${PROJECT_NAME}
+)
 
 ## OLD NODE
 #add_executable(velocity_scaling_iso_15066_node src/velocity_scaling_iso_15066_node.cpp)
@@ -119,14 +118,30 @@ install(
 
 add_executable(ssm_iso_15066_node_v2
     src/ssm_iso_15066_node_v2.cpp
-    src/${PROJECT_NAME}/ssm_ros_dynamic_node_library.cpp
-    src/${PROJECT_NAME}/ssm_ros_base_node_library.cpp
+    #src/${PROJECT_NAME}/ssm_ros_dynamic_node_library.cpp
+    #src/${PROJECT_NAME}/ssm_ros_base_node_library.cpp
     )
 ament_target_dependencies(ssm_iso_15066_node_v2
     rclcpp
+    #tf2_ros
+    #tf2_eigen
+    #std_msgs
+    #geometry_msgs
+    #sensor_msgs
+    #trajectory_msgs
+    #name_sorting
     )
 target_link_libraries(ssm_iso_15066_node_v2
     ${PROJECT_NAME}
+    #${tf2_ros_LIBRARIES}
+    #${std_msgs_LIBRARIES}
+    #${geometry_msgs_LIBRARIES}
+    #${sensor_msgs_LIBRARIES}
+    #${trajectory_msgs_LIBRARIES}
+    #${name_sorting_LIBRARIES}
+    #Eigen3::Eigen
+    #rdyn_core::rdyn_core
+    #velocity_scaling_iso15066::velocity_scaling_iso15066
     )
 target_include_directories(ssm_iso_15066_node_v2 PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -134,16 +149,6 @@ target_include_directories(ssm_iso_15066_node_v2 PUBLIC
 target_compile_features(ssm_iso_15066_node_v2 PUBLIC c_std_99 cxx_std_17)
 install(TARGETS ssm_iso_15066_node_v2
     DESTINATION lib/${PROJECT_NAME})
-
-#target_link_libraries(ssm_iso_15066_node_v2 velocity_scaling_iso15066::velocity_scaling_iso15066)
-ament_target_dependencies(ssm_iso_15066_node_v2 rclcpp)
-target_compile_features(ssm_iso_15066_node_v2 PUBLIC c_std_99 cxx_std_17)  
-#target_include_directories(ssm_iso_15066_node_v2 PUBLIC
-#  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-#  $<INSTALL_INTERFACE:include>)
-#install(TARGETS ssm_iso_15066_node_v2
-#  DESTINATION lib/${PROJECT_NAME})
-
 
 install(DIRECTORY launch config
     DESTINATION share/${PROJECT_NAME})

@@ -107,7 +107,7 @@ public:
 
   SsmBaseNode();
 
-  virtual void spin()=0;
+  virtual void spin(){};
 
   virtual void publish_ovr(double& ovr);
 
