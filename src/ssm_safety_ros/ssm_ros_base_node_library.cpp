@@ -147,10 +147,9 @@ void HumanPoseNotifier::callback(const geometry_msgs::msg::PoseArray::SharedPtr 
   new_data_available_ = true;
 }
 
+SsmBaseNode::SsmBaseNode(std::string name): rclcpp::Node(name){}
 
-
-
-SsmBaseNode::SsmBaseNode(): Node("ssm_node")
+bool SsmBaseNode::init()
 {
   // get params
   this->declare_parameter("sampling_time", 0.02);
@@ -192,6 +191,8 @@ SsmBaseNode::SsmBaseNode(): Node("ssm_node")
 
 
   RCLCPP_INFO(this->get_logger(), "ssm_base_node initialized");
+
+  return true;
 }
 
 void SsmBaseNode::publish_ovr(double& ovr)

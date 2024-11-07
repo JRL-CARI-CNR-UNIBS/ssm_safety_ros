@@ -26,12 +26,6 @@ find_package(velocity_scaling_iso15066 REQUIRED)
 #tf_conversions
 #moveit_ros_planning_interface
 
-#include_directories(
-#   include
-#   ${EIGEN3_INCLUDE_DIRS}
-#   ${rdyn_core_INCLUDE_DIRS}
-#)
-
 # CREATE PKG LIBRARY
 add_library(${PROJECT_NAME} SHARED
     src/${PROJECT_NAME}/ssm_ros_base_node_library.cpp
@@ -86,35 +80,8 @@ install(
   DESTINATION include/${PROJECT_NAME}
 )
 
-## OLD NODE
-#add_executable(velocity_scaling_iso_15066_node src/velocity_scaling_iso_15066_node.cpp)
-#ament_target_dependencies(velocity_scaling_iso_15066_node PUBLIC
-#    rclcpp
-#    tf2_ros
-#    std_msgs
-#    geometry_msgs 
-#    sensor_msgs 
-#    name_sorting 
-#    tf2_eigen
-#)
-#target_link_libraries(velocity_scaling_iso_15066_node PUBLIC 
-#    ${tf2_ros_LIBRARIES}
-#    ${std_msgs_LIBRARIES}
-#    ${geometry_msgs_LIBRARIES}
-#    ${name_sorting_LIBRARIES}
-#    Eigen3::Eigen
-#    rdyn_core::rdyn_core
-#    velocity_scaling_iso15066::velocity_scaling_iso15066
-#)
-#target_compile_features(velocity_scaling_iso_15066_node PUBLIC c_std_99 cxx_std_17)  
-#target_include_directories(velocity_scaling_iso_15066_node PUBLIC
-#  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-#  $<INSTALL_INTERFACE:include>)
-#install(TARGETS velocity_scaling_iso_15066_node
-#  DESTINATION lib/${PROJECT_NAME})
 
-# NEW NODE
-
+# NODE
 
 add_executable(ssm_iso_15066_node_v2
     src/ssm_iso_15066_node_v2.cpp
@@ -133,15 +100,6 @@ ament_target_dependencies(ssm_iso_15066_node_v2
     )
 target_link_libraries(ssm_iso_15066_node_v2
     ${PROJECT_NAME}
-    #${tf2_ros_LIBRARIES}
-    #${std_msgs_LIBRARIES}
-    #${geometry_msgs_LIBRARIES}
-    #${sensor_msgs_LIBRARIES}
-    #${trajectory_msgs_LIBRARIES}
-    #${name_sorting_LIBRARIES}
-    #Eigen3::Eigen
-    #rdyn_core::rdyn_core
-    #velocity_scaling_iso15066::velocity_scaling_iso15066
     )
 target_include_directories(ssm_iso_15066_node_v2 PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

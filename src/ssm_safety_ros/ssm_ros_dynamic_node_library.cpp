@@ -29,11 +29,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ssm_safety_ros/ssm_ros_dynamic_node_library.h"
 #include "name_sorting/name_sorting.hpp"
 
-RobotDescriptionReader::RobotDescriptionReader(const rclcpp::Node::SharedPtr& node)
-{
-  node_=node;
-}
-
 bool RobotDescriptionReader::is_available()
 {
   return has_one_available_;
@@ -48,7 +43,7 @@ void RobotDescriptionReader::callback(const std_msgs::msg::String& msg)
   mtx_.unlock();
 }
 
-bool RobotDescriptionReader::get_robot_description(std::string& robot_description, const double& timeout_secs, const bool& use_stored_urdf_if_available)
+bool RobotDescriptionReader::get_robot_description(rclcpp::Node::SharedPtr& node, std::string& robot_description, const double& timeout_secs, const bool& use_stored_urdf_if_available)
 {
   if (this->is_available() && use_stored_urdf_if_available)
   {
@@ -57,13 +52,13 @@ bool RobotDescriptionReader::get_robot_description(std::string& robot_descriptio
   }
 
   has_new_available_ = false;
-  robot_description_sub_ = node_->create_subscription<std_msgs::msg::String>("/robot_description", rclcpp::QoS(1).transient_local().reliable(), std::bind(&RobotDescriptionReader::callback, this, std::placeholders::_1));
+  robot_description_sub_ = node->create_subscription<std_msgs::msg::String>("/robot_description", rclcpp::QoS(1).transient_local().reliable(), std::bind(&RobotDescriptionReader::callback, this, std::placeholders::_1));
 
   auto t0 = rclcpp::Clock{}.now();
   while (!has_new_available_ && (rclcpp::Clock{}.now() - t0).seconds() <= timeout_secs)
   {
-    rclcpp::spin_some(node_->get_node_base_interface());
-    RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 0.5, "waiting for robot description to come up");
+    rclcpp::spin_some(node->get_node_base_interface());
+    RCLCPP_WARN_THROTTLE(node->get_logger(), *node->get_clock(), 0.5, "waiting for robot description to come up");
     rclcpp::sleep_for(std::chrono::milliseconds(100));
   }
 
@@ -77,7 +72,7 @@ bool RobotDescriptionReader::get_robot_description(std::string& robot_descriptio
   else if (this->is_available())
   {
     robot_description = robot_description_;
-    RCLCPP_ERROR(node_->get_logger(), "could not read up-to-date robot description. returning the last available one.");
+    RCLCPP_ERROR(node->get_logger(), "could not read up-to-date robot description. returning the last available one.");
   }
   return false;
 }
@@ -125,14 +120,21 @@ void UnscaledJointTargetNotifier::callback(const sensor_msgs::msg::JointState::S
   new_data_available_ = true;
 }
 
-SsmDynamicNode::SsmDynamicNode(): SsmBaseNode()
+SsmDynamicNode::SsmDynamicNode(std::string name): SsmBaseNode(name){}
+
+bool SsmDynamicNode::init()
 {
+  if (!SsmBaseNode::init())
+    return false;
+
   // create kinematic chain
-  robot_description_reader_ = std::make_shared<RobotDescriptionReader>(shared_from_this());
+  rclcpp::Node::SharedPtr nh = shared_from_this();
+  robot_description_reader_ = std::make_shared<RobotDescriptionReader>();
   std::string robot_description;
-  if (!robot_description_reader_->get_robot_description(robot_description))
+  if (!robot_description_reader_->get_robot_description(nh,robot_description))
   {
     RCLCPP_FATAL(this->get_logger(), "could not find robot description. FAILED.");
+    return false;
   }
 
   Eigen::Vector3d grav;
@@ -143,13 +145,15 @@ SsmDynamicNode::SsmDynamicNode(): SsmBaseNode()
   if(model == nullptr)
   {
     RCLCPP_FATAL(this->get_logger(), "Cannot load robot_description!");
+    return false;
   }
   RCLCPP_INFO(this->get_logger(), "urdf model ok");
 
-  rdyn::ChainPtr chain = rdyn::createChain(*model, base_frame_, tool_frame_, grav);
-  if (!chain)
+  chain_ = rdyn::createChain(*model, base_frame_, tool_frame_, grav);
+  if (!chain_)
   {
     RCLCPP_FATAL_STREAM(this->get_logger(), "Unable to create a chain between " << base_frame_ << " and " << tool_frame_);
+    return false;
   }
 
   RCLCPP_INFO(this->get_logger(), "rosdyn chain ok");
@@ -159,28 +163,28 @@ SsmDynamicNode::SsmDynamicNode(): SsmBaseNode()
   this->declare_parameter("test_links", test_links);
   this->get_parameter("test_links", test_links);
 
-  this->declare_parameter("maximum_cartesian_acceleration", 0.1);
-  double max_cart_acc = this->get_parameter("maximum_cartesian_acceleration").as_double();
+  this->declare_parameter("dynamic_ssm.maximum_cartesian_acceleration", 0.1);
+  double max_cart_acc = this->get_parameter("dynamic_ssm.maximum_cartesian_acceleration").as_double();
   RCLCPP_INFO(this->get_logger(), "maximum_cartesian_acceleration: %f", max_cart_acc);
 
-  this->declare_parameter("reaction_time", 0.15);
-  double reaction_time = this->get_parameter("reaction_time").as_double();
+  this->declare_parameter("dynamic_ssm.reaction_time", 0.15);
+  double reaction_time = this->get_parameter("dynamic_ssm.reaction_time").as_double();
   RCLCPP_INFO(this->get_logger(), "reaction_time: %f", reaction_time);
 
-  this->declare_parameter("default_human_speed", 0.0);
-  double default_human_speed = this->get_parameter("default_human_speed").as_double();
+  this->declare_parameter("dynamic_ssm.default_human_speed", 0.0);
+  double default_human_speed = this->get_parameter("dynamic_ssm.default_human_speed").as_double();
   RCLCPP_INFO(this->get_logger(), "default_human_speed: %f", default_human_speed);
 
-  this->declare_parameter("min_protective_dist", 0.3);
-  double min_protective_dist = this->get_parameter("min_protective_dist").as_double();
+  this->declare_parameter("dynamic_ssm.min_protective_dist", 0.3);
+  double min_protective_dist = this->get_parameter("dynamic_ssm.min_protective_dist").as_double();
   RCLCPP_INFO(this->get_logger(), "min_protective_dist: %f", min_protective_dist);
 
-  this->declare_parameter("min_filtered_dist", 0.15);
-  double min_filtered_dist = this->get_parameter("min_filtered_dist").as_double();
+  this->declare_parameter("dynamic_ssm.min_filtered_dist", 0.15);
+  double min_filtered_dist = this->get_parameter("dynamic_ssm.min_filtered_dist").as_double();
   RCLCPP_INFO(this->get_logger(), "min_filtered_dist: %f", min_filtered_dist);
 
-  this->declare_parameter("measure_human_speed", false);
-  bool measure_human_speed = this->get_parameter("measure_human_speed").as_bool();
+  this->declare_parameter("dynamic_ssm.measure_human_speed", false);
+  bool measure_human_speed = this->get_parameter("dynamic_ssm.measure_human_speed").as_bool();
   RCLCPP_INFO(this->get_logger(), "measure_human_speed: %d", measure_human_speed);
 
   // create SSM scaling calculator
@@ -203,6 +207,8 @@ SsmDynamicNode::SsmDynamicNode(): SsmBaseNode()
   js_sub_ = this->create_subscription<sensor_msgs::msg::JointState>("/unscaled_joint_target", 1, std::bind(&UnscaledJointTargetNotifier::callback, js_notif_, std::placeholders::_1));
 
   RCLCPP_INFO(this->get_logger(), "ssm_dynamic_node initialized");
+
+  return true;
 }
 
 void SsmDynamicNode::spin()

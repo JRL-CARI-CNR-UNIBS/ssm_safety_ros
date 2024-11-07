@@ -7,9 +7,15 @@ int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
 
-  SsmDynamicNode node2;
   //node.spin();
-  SsmBaseNode node;
+  // SsmBaseNode node;
+
+  std::cout << "first node created" << std::endl;
+
+  std::shared_ptr<SsmDynamicNode> node2 = std::make_shared<SsmDynamicNode>("ssm_node");
+  node2->init();
+  node2->spin();
+
 
   rclcpp::shutdown();
   return 0;

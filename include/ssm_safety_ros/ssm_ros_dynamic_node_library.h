@@ -45,7 +45,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 class RobotDescriptionReader
 {
 protected:
-  rclcpp::Node::SharedPtr node_;
   bool has_one_available_{false}; // set to true when it reads urdf the first time
   bool has_new_available_{true};  // reset every time i need to retrieve a new urdf
   std::string robot_description_;
@@ -56,11 +55,9 @@ protected:
 
 public:
 
-  RobotDescriptionReader(const rclcpp::Node::SharedPtr& node);
-
   bool is_available();
 
-  bool get_robot_description(std::string& robot_description, const double& timeout_secs=10.0, const bool& use_stored_urdf_if_available=true);
+  bool get_robot_description(rclcpp::Node::SharedPtr& node, std::string& robot_description, const double& timeout_secs=10.0, const bool& use_stored_urdf_if_available=true);
 
 };
 using RobotDescriptionReaderPtr = std::shared_ptr<RobotDescriptionReader>;
@@ -105,8 +102,10 @@ protected:
 
 public:
 
-  SsmDynamicNode();
+  SsmDynamicNode(std::string name);
 
-  virtual void spin();
+  virtual bool init() override;
+
+  virtual void spin() override;
 
 };

@@ -1,4 +1,4 @@
-velocity_scaling_iso_15066_node:
+ssm_iso_15066_node_v2:
   ros__parameters:
     sampling_time: 0.02
     base_frame: "base_link" # world
@@ -12,6 +12,6 @@ velocity_scaling_iso_15066_node:
     #  - "tool0"
     dynamic_ssm:
       reaction_time: 0.1                  # time before the system reacts to the human presence
-      maximum_cartesian_acceleration: 0.2 # estimate of max deceleration 
-      min_protective_dist: 0.2            # distance corresponding to null velocity 
+      maximum_cartesian_acceleration: 0.15 # estimate of max deceleration 
+      min_protective_dist: 0.5            # distance corresponding to null velocity 
       min_filtered_dist: 0.0              # all human points within this distance are considered false positive and filtered out

@@ -105,9 +105,11 @@ protected:
 
 public:
 
-  SsmBaseNode();
+  SsmBaseNode(std::string name);
 
-  virtual void spin(){};
+  virtual bool init();
+
+  virtual void spin()=0;
 
   virtual void publish_ovr(double& ovr);
 
