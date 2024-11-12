@@ -1,6 +1,6 @@
 ssm_iso_15066_node_v2:
   ros__parameters:
-    sampling_time: 0.02
+    sampling_time: 0.04
     base_frame: "base_link" # world
     tool_frame: "tcp" # tool0
     sphere_radius: 0.3
@@ -15,3 +15,5 @@ ssm_iso_15066_node_v2:
       maximum_cartesian_acceleration: 0.15 # estimate of max deceleration 
       min_protective_dist: 0.5            # distance corresponding to null velocity 
       min_filtered_dist: 0.0              # all human points within this distance are considered false positive and filtered out
+    foo: "bar"
+

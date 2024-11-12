@@ -104,8 +104,8 @@ public:
 
   SsmDynamicNode(std::string name);
 
-  virtual bool init() override;
+  bool init() override;
 
-  virtual void spin() override;
+  void spin() override;
 
 };

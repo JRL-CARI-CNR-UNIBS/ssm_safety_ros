@@ -147,37 +147,44 @@ void HumanPoseNotifier::callback(const geometry_msgs::msg::PoseArray::SharedPtr 
   new_data_available_ = true;
 }
 
-SsmBaseNode::SsmBaseNode(std::string name): rclcpp::Node(name){}
+SsmBaseNode::SsmBaseNode(std::string name): rclcpp::Node(name)
+{
+  params_ns_ = "/"+name+"/";
+}
 
 bool SsmBaseNode::init()
 {
+
   // get params
-  this->declare_parameter("sampling_time", 0.02);
-  sampling_time_ = this->get_parameter("sampling_time").as_double();
-  RCLCPP_INFO(this->get_logger(), "sampling time: %f", sampling_time_);
+  std::string what;
+
+  if (!cnr::param::get(params_ns_+"sampling_time", sampling_time_, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter sampling_time. default = %f. (%s)", sampling_time_, what.c_str());
+  }
+  if (!cnr::param::get(params_ns_+"base_frame", base_frame_, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter base_frame. default = %s. (%s)", base_frame_.c_str(), what.c_str());
+  }
+  if (!cnr::param::get(params_ns_+"tool_frame", tool_frame_, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter tool_frame. default = %s. (%s)", tool_frame_.c_str(), what.c_str());
+  }
+  if (!cnr::param::get(params_ns_+"time_remove_old_objects", time_remove_old_objects_, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter time_remove_old_objects. default = %f. (%s)", time_remove_old_objects_, what.c_str());
+  }
+  //if (!cnr::param::get(params_ns+"publish_obstacles", publish_obstacles, what))
+  //{
+  //  RCLCPP_WARN(this->get_logger(), "parameter publish_obstacles undefined. default = %f. (%s)", publish_obstacles);
+  //}
+  //if (!cnr::param::get(params_ns+"sphere_radius", sphere_radius, what))
+  //{
+  //  RCLCPP_WARN(this->get_logger(), "parameter sphere_radius undefined. default = %f. (%s)", sphere_radius);
+  //}
 
   pos_ovr_change_=0.25*sampling_time_;
   neg_ovr_change_=2.0*sampling_time_;
-
-  this->declare_parameter("base_frame", "base_link");
-  base_frame_ = this->get_parameter("base_frame").as_string();
-  RCLCPP_INFO_STREAM(this->get_logger(), "base_frame: " << base_frame_);
-
-  this->declare_parameter("tool_frame", "tcp");
-  tool_frame_ = this->get_parameter("tool_frame").as_string();
-  RCLCPP_INFO_STREAM(this->get_logger(), "tool_frame: " << tool_frame_);
-
-  // this->declare_parameter("publish_obstacles", false);
-  // publish_obstacles_ = this->get_parameter("publish_obstacles").as_bool();
-  // RCLCPP_INFO(this->get_logger(), "publish_obstacles: %d", publish_obstacles_);
-
-  // this->declare_parameter("sphere_radius", 0.3);
-  // sphere_radius_ = this->get_parameter("sphere_radius").as_double();
-  // RCLCPP_INFO(this->get_logger(), "sphere_radius: %f", sphere_radius_);
-
-  this->declare_parameter("time_remove_old_objects", 0.5);
-  time_remove_old_objects_ = this->get_parameter("time_remove_old_objects").as_double();
-  RCLCPP_INFO(this->get_logger(), "time_remove_old_objects: %f", time_remove_old_objects_);
 
   ovr_pub_ = this->create_publisher<std_msgs::msg::Int16>("/speed_ovr",1);
   ovr_float_pub_ = this->create_publisher<std_msgs::msg::Float32>("/speed_ovr_float",1);
@@ -226,6 +233,11 @@ void SsmBaseNode::publish_distance(const double& dist)
 
   dist_msg_float64_.data=dist;
   dist_float64_pub_->publish(dist_msg_float64_);
+}
+
+void SsmBaseNode::set_cnr_param_namespace(const std::string &ns)
+{
+  params_ns_ = "/"+ns+"/";
 }
 
 

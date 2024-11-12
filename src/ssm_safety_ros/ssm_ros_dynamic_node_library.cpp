@@ -125,7 +125,9 @@ SsmDynamicNode::SsmDynamicNode(std::string name): SsmBaseNode(name){}
 bool SsmDynamicNode::init()
 {
   if (!SsmBaseNode::init())
+  {
     return false;
+  }
 
   // create kinematic chain
   rclcpp::Node::SharedPtr nh = shared_from_this();
@@ -159,33 +161,43 @@ bool SsmDynamicNode::init()
   RCLCPP_INFO(this->get_logger(), "rosdyn chain ok");
 
   // get params
+  std::string what;
+
   std::vector<std::string> test_links = chain_->getLinksName();
-  this->declare_parameter("test_links", test_links);
-  this->get_parameter("test_links", test_links);
-
-  this->declare_parameter("dynamic_ssm.maximum_cartesian_acceleration", 0.1);
-  double max_cart_acc = this->get_parameter("dynamic_ssm.maximum_cartesian_acceleration").as_double();
-  RCLCPP_INFO(this->get_logger(), "maximum_cartesian_acceleration: %f", max_cart_acc);
-
-  this->declare_parameter("dynamic_ssm.reaction_time", 0.15);
-  double reaction_time = this->get_parameter("dynamic_ssm.reaction_time").as_double();
-  RCLCPP_INFO(this->get_logger(), "reaction_time: %f", reaction_time);
-
-  this->declare_parameter("dynamic_ssm.default_human_speed", 0.0);
-  double default_human_speed = this->get_parameter("dynamic_ssm.default_human_speed").as_double();
-  RCLCPP_INFO(this->get_logger(), "default_human_speed: %f", default_human_speed);
-
-  this->declare_parameter("dynamic_ssm.min_protective_dist", 0.3);
-  double min_protective_dist = this->get_parameter("dynamic_ssm.min_protective_dist").as_double();
-  RCLCPP_INFO(this->get_logger(), "min_protective_dist: %f", min_protective_dist);
-
-  this->declare_parameter("dynamic_ssm.min_filtered_dist", 0.15);
-  double min_filtered_dist = this->get_parameter("dynamic_ssm.min_filtered_dist").as_double();
-  RCLCPP_INFO(this->get_logger(), "min_filtered_dist: %f", min_filtered_dist);
-
-  this->declare_parameter("dynamic_ssm.measure_human_speed", false);
-  bool measure_human_speed = this->get_parameter("dynamic_ssm.measure_human_speed").as_bool();
-  RCLCPP_INFO(this->get_logger(), "measure_human_speed: %d", measure_human_speed);
+  if (!cnr::param::get(params_ns_+"dynamic_ssm/test_links", test_links, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter dynamic_ssm/test_links. default = ALL. (%s)", what.c_str());
+  }
+  double max_cart_acc = 0.1;
+  if (!cnr::param::get(params_ns_+"dynamic_ssm/maximum_cartesian_acceleration", max_cart_acc, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter dynamic_ssm/maximum_cartesian_acceleration. default = %f. (%s)", max_cart_acc, what.c_str());
+  }
+  double reaction_time = 0.15;
+  if (!cnr::param::get(params_ns_+"dynamic_ssm/maximum_cartesian_acceleration", reaction_time, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter dynamic_ssm/reaction_time. default = %f. (%s)", reaction_time, what.c_str());
+  }
+  double default_human_speed = 0.0;
+  if (!cnr::param::get(params_ns_+"dynamic_ssm/default_human_speed", default_human_speed, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter dynamic_ssm/default_human_speed. default = %f. (%s)", default_human_speed, what.c_str());
+  }
+  double min_protective_dist = 0.3;
+  if (!cnr::param::get(params_ns_+"dynamic_ssm/min_protective_dist", min_protective_dist, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter dynamic_ssm/min_protective_dist. default = %f. (%s)", min_protective_dist, what.c_str());
+  }
+  double min_filtered_dist = 0.1;
+  if (!cnr::param::get(params_ns_+"dynamic_ssm/min_filtered_dist", min_filtered_dist, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter dynamic_ssm/min_filtered_dist. default = %f. (%s)", min_filtered_dist, what.c_str());
+  }
+  bool measure_human_speed = false;
+  if (!cnr::param::get(params_ns_+"dynamic_ssm/measure_human_speed", measure_human_speed, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter dynamic_ssm/measure_human_speed. default = %d. (%s)", measure_human_speed, what.c_str());
+  }
 
   // create SSM scaling calculator
   ssm_ = std::make_shared<ssm15066::DeterministicSSM>(chain_);
@@ -288,7 +300,7 @@ void SsmDynamicNode::spin()
       obstacle_notifier_->get_data(pc_in_b_pos_);
       ssm_->setPointCloud(pc_in_b_pos_, pc_in_b_vel_);
 
-      last_pose_topic_ = rclcpp::Time(0);
+      last_pose_topic_ = rclcpp::Clock{}.now();
 
       // TODO
       #if 0
@@ -337,7 +349,7 @@ void SsmDynamicNode::spin()
     }
 
     // poses is old
-    if ((rclcpp::Time(0)-last_pose_topic_).seconds() > time_remove_old_objects_)
+    if ((rclcpp::Clock{}.now()-last_pose_topic_).seconds() > time_remove_old_objects_)
     {
       pc_in_b_pos_.resize(3,0);
       pc_in_b_vel_.resize(3,0);

@@ -41,6 +41,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <tf2_ros/transform_listener.h>
 #include <tf2_eigen/tf2_eigen.hpp>
 
+#include <cnr_param/cnr_param.h>
+
+
 class HumanPoseNotifier
 {
 protected:
@@ -69,11 +72,13 @@ class SsmBaseNode :  public rclcpp::Node
 {
 protected:
 
-  double sampling_time_;
+  std::string params_ns_;
+
+  double sampling_time_{0.02};
   std::string base_frame_;
   std::string tool_frame_;
   // std::string sphere_radius_;
-  double time_remove_old_objects_;
+  double time_remove_old_objects_{0.5};
 
   double last_ovr_{0.0};
   rclcpp::Time last_pose_topic_; // = rclcpp::Time(0);
@@ -114,6 +119,8 @@ public:
   virtual void publish_ovr(double& ovr);
 
   virtual void publish_distance(const double& dist);
+
+  void set_cnr_param_namespace(const std::string& ns);
 
 
 };
