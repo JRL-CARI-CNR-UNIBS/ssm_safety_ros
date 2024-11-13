@@ -20,7 +20,7 @@ def generate_launch_description():
     config = os.path.join(
         get_package_share_directory('ssm_safety_ros'),
         'config',
-        'example_cnr_params.yaml'
+        'example_params.yaml'
     )
 
     ssm_node = Node(
