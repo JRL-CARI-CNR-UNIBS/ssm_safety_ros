@@ -55,7 +55,7 @@ protected:
 
 public:
 
-  HumanPoseNotifier(const std::string& base_frame);
+  HumanPoseNotifier(const std::string& base_frame, const tf2_ros::Buffer::SharedPtr& tf_buffer);
 
   bool is_a_new_data_available();
 
@@ -64,6 +64,8 @@ public:
   bool get_data(Eigen::Matrix<double,3,Eigen::Dynamic>& pc_in_b);
 
   void callback(const geometry_msgs::msg::PoseArray::SharedPtr msg);
+
+  tf2_ros::Buffer::SharedPtr get_tf_buffer(){return tf_buffer_;};
 
 };
 using HumanPoseNotifierPtr = std::shared_ptr<HumanPoseNotifier>;
@@ -95,6 +97,7 @@ protected:
   Eigen::Matrix<double,3,Eigen::Dynamic> pc_in_b_vel_;
 
   tf2_ros::Buffer::SharedPtr tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
   double pos_ovr_change_;
   double neg_ovr_change_;
@@ -121,6 +124,5 @@ public:
   virtual void publish_distance(const double& dist);
 
   void set_cnr_param_namespace(const std::string& ns);
-
 
 };

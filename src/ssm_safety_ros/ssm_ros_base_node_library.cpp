@@ -28,9 +28,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "ssm_safety_ros/ssm_ros_base_node_library.h"
 
-HumanPoseNotifier::HumanPoseNotifier(const std::string& base_frame)
+HumanPoseNotifier::HumanPoseNotifier(const std::string& base_frame, const tf2_ros::Buffer::SharedPtr& tf_buffer)
 {
   base_frame_ = base_frame;
+  tf_buffer_ = tf_buffer;
 }
 
 bool HumanPoseNotifier::is_a_new_data_available()
@@ -186,16 +187,20 @@ bool SsmBaseNode::init()
   pos_ovr_change_=0.25*sampling_time_;
   neg_ovr_change_=2.0*sampling_time_;
 
+  // init tf buffer
+  tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+  tf_listener_  = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+
   ovr_pub_ = this->create_publisher<std_msgs::msg::Int16>("/speed_ovr",1);
   ovr_float_pub_ = this->create_publisher<std_msgs::msg::Float32>("/speed_ovr_float",1);
   ovr_float64_pub_ = this->create_publisher<std_msgs::msg::Float64>("/speed_ovr_float64",1);
   dist_pub_ = this->create_publisher<std_msgs::msg::Float32>("/min_distance_from_poses",1);
   dist_float64_pub_ = this->create_publisher<std_msgs::msg::Float64>("/min_distance_from_poses_float64",1);
 
-  obstacle_notifier_ = std::make_shared<HumanPoseNotifier>(base_frame_);
+  obstacle_notifier_ = std::make_shared<HumanPoseNotifier>(base_frame_, tf_buffer_);
   // CHECK THIS
   obstacle_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>("/poses", 1, std::bind(&HumanPoseNotifier::callback, obstacle_notifier_, std::placeholders::_1));
-
 
   RCLCPP_INFO(this->get_logger(), "ssm_base_node initialized");
 
@@ -239,5 +244,7 @@ void SsmBaseNode::set_cnr_param_namespace(const std::string &ns)
 {
   params_ns_ = "/"+ns+"/";
 }
+
+
 
 
