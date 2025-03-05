@@ -1,0 +1,18 @@
+repositories:
+  cnr_param:
+    type: git
+    url: https://github.com/CNR-STIIMA-IRAS/cnr_param
+  rdyn_core:
+    type: git
+    url: https://github.com/CNR-STIIMA-IRAS/rosdyn
+    version: modern_cmake
+  velocity_scaling_iso15066:
+    type: git
+    url: https://github.com/CNR-STIIMA-IRAS/ssm_safety
+    version: rosfree
+  name_sorting:
+    type: git
+    url: https://github.com/CNR-STIIMA-IRAS/name_sorting
+    version: ros2
+
+

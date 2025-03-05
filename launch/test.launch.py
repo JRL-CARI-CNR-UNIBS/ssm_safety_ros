@@ -14,34 +14,31 @@ import xacro
 def generate_launch_description():
 
     declared_arguments = []
-    
-    ssm_params = PathJoinSubstitution(
-        [
-            FindPackageShare("ssm_safety_ros"),
-            "config",
-            "example_params.yaml",
-        ]
-    )
 
+    ld = LaunchDescription()
+    
     config = os.path.join(
         get_package_share_directory('ssm_safety_ros'),
         'config',
         'example_params.yaml'
     )
-    
+
     ssm_node = Node(
         package="ssm_safety_ros",
-        name="velocity_scaling_iso_15066_node",
-        executable="velocity_scaling_iso_15066_node",
-        parameters=[config],
+        name="ssm_safety_node",
+        executable="ssm_safety_node",
+        #parameters=[config],
         output="screen"
     )
-    
-    nodes_to_start = [
-        ssm_node,
-    ]
 
-    return LaunchDescription( nodes_to_start )
+    #'cnr_param_server -p $(find-pkg-share graph_ros_tests)/config/test_solver.yaml'
+
+    load_params = ExecuteProcess(cmd=['cnr_param_server', '-p', str(config)])
+    
+    ld.add_action(ssm_node)
+    ld.add_action(load_params)
+
+    return ld
 
 
 

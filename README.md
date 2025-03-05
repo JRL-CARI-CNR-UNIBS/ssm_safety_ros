@@ -1,15 +1,15 @@
 # ssm_safety_ros
 
-A ROS2 implementation of the ssm_safety library to slow robots down in proximity of humans.
+A ROS2 implementation of the [ssm_safety](https://github.com/CNR-STIIMA-IRAS/ssm_safety/tree/rosfree) library to slow robots down in proximity of humans.
 
-## Example
+## Example of usage
 
 1. Launch your robot
 2. Launch node
 ```
 ros2 launch ssm_safety_ros test.launch.py
 ```
-3. Publish a ```geomtry_msgs::PoseArray``` msg on topic ```/poses```, e.g.:
+3. Publish a ```geometry_msgs::PoseArray``` msg on topic ```/poses```, e.g.:
 ```
 ros2 topic pub -r 10 /poses geometry_msgs/PoseArray "header:
   stamp:
@@ -30,12 +30,16 @@ poses:
 4. ```ros2 topic echo /speed_ovr```
 5. Move the robot around. When it approaches the msg's pose, the value of ```/speed_ovr``` will decrease.
 
-**IMPORTANT:**To actually slow the robot down, you need a controller that takes the /speed_ovr value and scale the robot'speed accordingly.
+**IMPORTANT:** To actually slow the robot down, you need a controller that takes the /speed_ovr value and scale the robot's speed accordingly.
 An example of such controller can be found [here](https://github.com/JRL-CARI-CNR-UNIBS/scaled_follow_joint_trajectory_controller_ros2).
 
 ## Options
 
-See ```config/example_params.yaml```
+See [config/example_params.yaml](https://github.com/JRL-CARI-CNR-UNIBS/ssm_safety_ros/blob/main/config/example_params.yaml)
+
+## Dependencies
+
+See [dependencies.repos](https://github.com/JRL-CARI-CNR-UNIBS/ssm_safety_ros/blob/main/dependencies.repos) 
 
 ## References
 

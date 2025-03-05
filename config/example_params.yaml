@@ -1,17 +1,58 @@
-velocity_scaling_iso_15066_node:
-  ros__parameters:
-    sampling_time: 0.02
-    base_frame: "base_link" # world
-    tool_frame: "tcp" # tool0
-    sphere_radius: 0.3
-    time_remove_old_objects: 0.5
-    #test_links:
-    #  - "wrist_1"
-    #  - "wrist_2"
-    #  - "wrist_3"
-    #  - "tool0"
-    dynamic_ssm:
-      reaction_time: 0.1                  # time before the system reacts to the human presence
-      maximum_cartesian_acceleration: 0.2 # estimate of max deceleration 
-      min_protective_dist: 0.2            # distance corresponding to null velocity 
-      min_filtered_dist: 0.0              # all human points within this distance are considered false positive and filtered out
+safety_configuration: 
+  name: ssm_safety_ros # name of the configuration to be loaded
+  type: fixed_distance # OPTIONS: [dynamic_ssm, fixed_areas, fixed_distance]
+
+ssm_safety_ros:
+  sampling_time: 0.02
+  base_frame: "base_link" # world
+  tool_frame: "tcp" # tool0
+  time_remove_old_objects: 1.0
+  #test_links:
+  #  - "wrist_1"
+  #  - "wrist_2"
+  #  - "wrist_3"
+  #  - "tool0"
+  #
+  # please specify the safety parameters for the "safety_configuration.type" you chose
+  # 
+  dynamic_ssm:
+    reaction_time: 0.1                   # time before the system reacts to the human presence
+    maximum_cartesian_acceleration: 0.15 # estimate of max deceleration 
+    min_protective_dist: 0.3             # distance corresponding to null velocity 
+    min_filtered_dist: 0.0               # all human points within this distance are considered false positive and filtered out
+  # 
+  fixed_areas:
+    areas: # areas are in 2D from top view w.r.t. base_frame
+    - name: "area0"
+      override: 0.5 # [% of nominal speed] speed limit in area0 
+      corners:      # [m] areas are defined as rectangles in 2D from top view
+      - [0,0]
+      - [0,  1.9]
+      - [1.8,1.9]
+      - [1.8,0]
+    - name: "area1"
+      override: 0.3
+      corners:
+      - [0,0]
+      - [0,1.5]
+      - [1.8,1.5]
+      - [1.8,0]
+    - name: "stop_area"
+      override: 0.0 
+      corners:
+      - [0,0]
+      - [0,1.0]
+      - [1.8,1.0]
+      - [1.8,0]
+  #
+  fixed_distance:
+    areas: # areas are in 2D from top view w.r.t. tool frame
+    - name: "area0"
+      override: 0.5 # [% of nominal speed] speed limit in area0 
+      radius: 1.2 # [m] distance from tool_frame
+    - name: "area1"
+      override: 0.3
+      radius: 0.8
+    - name: "stop_area"
+      override: 0.0
+      radius: 0.5
