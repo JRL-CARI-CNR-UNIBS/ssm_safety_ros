@@ -31,25 +31,23 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdio>
 #include <rclcpp/rclcpp.hpp>
 #include <Eigen/Dense>
-#include "sensor_msgs/msg/joint_state.hpp"
-
-#include <std_msgs/msg/string.hpp>
 
 #include "ssm_safety_ros/ssm_ros_base_node_library.h"
-#include <velocity_scaling_iso15066/ssm15066.h>
 
-class SsmDynamicNode :  public SsmBaseNode
+
+class SsmSignalsNode :  public SsmBaseNode
 {
 protected:
 
-  ssm15066::DeterministicSSMPtr ssm_;
+  std::string signals_ns_;
+  std::vector<SignalHandlerPtr> signals_handlers_;
 
 public:
 
-  SsmDynamicNode(std::string name);
+  SsmSignalsNode(std::string name, std::string configuration);
 
-  bool init() override;
+  bool init();
 
-  void spin() override;
+  void spin();
 
 };

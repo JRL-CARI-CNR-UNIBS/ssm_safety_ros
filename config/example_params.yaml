@@ -1,6 +1,8 @@
 safety_configuration: 
   name: ssm_safety_ros # name of the configuration to be loaded
   type: fixed_distance # OPTIONS: [dynamic_ssm, fixed_areas, fixed_distance]
+  safety_signals: True
+  signals_configuration: signals
 
 ssm_safety_ros:
   sampling_time: 0.02
@@ -56,3 +58,17 @@ ssm_safety_ros:
     - name: "stop_area"
       override: 0.0
       radius: 0.5
+
+  signals:
+  - name: button_1
+    override: 0.5
+    interface: msg # msg or srv
+    channel: topic_name # topic or srv server name
+    normally_closed: false # default false
+    sampling_time: 0.05 # default: 0.05
+  - name: button_2
+    override: 0.1
+    interface: msg # msg or srv
+    channel: srv_name # topic or srv server name
+    normally_closed: false # default false
+    sampling_time: 0.05 # default: 0.05

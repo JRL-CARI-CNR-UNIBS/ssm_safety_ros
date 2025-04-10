@@ -37,14 +37,38 @@ bool SsmFixedAreasNode::init()
   if (!SsmBaseNode::init())
     return false;
 
+  // get params
+  std::string what;
+  bool activate_on_human=true;
+  if (!cnr::param::get(params_ns_+areas_param_ns_+"/activate_on_human", activate_on_human, what))
+  {
+    RCLCPP_INFO_STREAM(this->get_logger(), "could not load parameter fixed_areas/activate_on_human. Default: true." << what);
+  }
+  bool activate_on_robot=false;
+  if (!cnr::param::get(params_ns_+areas_param_ns_+"/activate_on_robot", activate_on_robot, what))
+  {
+    RCLCPP_INFO_STREAM(this->get_logger(), "could not load parameter fixed_areas/activate_on_robot. Default: false." << what);
+  }
+  bool activate_on_signal=false;
+  if (!cnr::param::get(params_ns_+areas_param_ns_+"/activate_on_signals", activate_on_signal, what))
+  {
+    RCLCPP_INFO_STREAM(this->get_logger(), "could not load parameter fixed_areas/activate_on_signal. Default: false." << what);
+  }
+
   // create SSM scaling calculator
-  ssm_ = std::make_shared<ssm15066::FixedAreasSSM>();
-  ssm_->init();
+  ssm_ = std::make_shared<ssm15066::FixedAreasSSM>(chain_);
+  ssm_->setCheckedRobotLinks(test_links_);
+  ssm_->init(activate_on_human, activate_on_robot, activate_on_signal);
   ssm_->setPointCloud(pc_in_b_pos_, pc_in_b_vel_);
 
   loadAreas();
   ssm_->printAreas();
 
+  if (activate_on_signal)
+  {
+    loadSignals();
+    ssm_->printSignals();
+  }
 
   RCLCPP_INFO(this->get_logger(), "ssm_fixed_areas_node initialized");
 
@@ -53,16 +77,27 @@ bool SsmFixedAreasNode::init()
 
 void SsmFixedAreasNode::spin()
 {
-  Eigen::VectorXd q;
-  Eigen::VectorXd dq;
+  Eigen::VectorXd q(nAx_);
+  Eigen::VectorXd dq(nAx_);
+  q.setZero();
+  dq.setZero();
+  std::vector<double> pos(nAx_);
+  std::vector<double> vel(nAx_);
 
-  int iter = 0;
   rclcpp::WallRate lp(1.0/sampling_time_);
   while (rclcpp::ok())
   {
     rclcpp::spin_some(this->get_node_base_interface());
 
-    iter++;
+    if (js_notif_->is_a_new_data_available())
+    {
+      js_notif_->get_data(pos, vel);
+      for (unsigned int iax=0;iax<nAx_;iax++)
+      {
+        q(iax)=pos.at(iax);
+        dq(iax)=vel.at(iax);
+      }
+    }
 
     if (obstacle_notifier_->is_a_new_data_available())
     {
@@ -82,9 +117,18 @@ void SsmFixedAreasNode::spin()
       ssm_->setPointCloud(pc_in_b_pos_,pc_in_b_vel_);
     }
 
-    if (!obstacle_notifier_->was_first_pose_received())
+    if (!obstacle_notifier_->was_first_pose_received() && ssm_->getActivateOnHuman())
     {
-      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2.0, "poses topic has not been received yet");
+      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "poses topic has not been received yet");
+    }
+
+    // get signals updates
+    if (ssm_->getActivateOnSignal())
+    {
+      for (const auto& signal: signals_)
+      {
+        ssm_->updateSignal(signal.first, signal.second->is_active());
+      }
     }
 
     double ovr=ssm_->computeScaling(q,dq);
@@ -131,3 +175,45 @@ bool SsmFixedAreasNode::loadAreas()
   }
   return true;
 }
+
+bool SsmFixedAreasNode::loadSignals()
+{
+  if (!ssm_)
+  {
+    RCLCPP_ERROR(this->get_logger(), "ssm_ must be created before using loadSignals()." );
+    return false;
+  }
+  // get signals from yaml
+  std::string what;
+  std::vector<Signal> signals;
+  if (!cnr::param::get(params_ns_+"/signals", signals, what))
+  {
+    RCLCPP_ERROR_STREAM(this->get_logger(), "could not load parameter /signals." << what);
+    return false;
+  }
+
+  for (auto& signal: signals)
+  {
+    // create topic handler or srv handler depending on signal type
+    SignalHandlerPtr sig_handler;
+    if (signal.interface.compare("msg")==0)
+    {
+      sig_handler = std::make_shared<TopicHandler>(signal, shared_from_this());
+    }
+    else if (signal.interface.compare("srv")==0)
+    {
+      sig_handler = std::make_shared<ServiceHandler>(signal, shared_from_this());
+    }
+
+    signals_.insert(std::pair<std::string,SignalHandlerPtr>(signal.name,sig_handler));
+
+    // add signals to ssm
+    ssm_->addSignal(signal.name,signal.areas);
+
+  }
+
+  return true;
+
+}
+
+

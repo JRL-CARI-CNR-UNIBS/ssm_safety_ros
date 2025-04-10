@@ -35,63 +35,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ssm_safety_ros/ssm_ros_base_node_library.h"
 #include <velocity_scaling_iso15066/ssm_fixed_areas.h>
 
-// first we define a struct containing the fixed area's info
-struct Area
-{
-  // TODO: this is ok if we only have two shapes, should use polimorphism
-  std::string name;
-  double override;
-  std::vector<std::vector<double>> corners;
-  double radius;
-};
-
-// second we specialize a template function from cnr_param to use custom structs
-namespace YAML
-{
-template <>
-struct convert<Area>
-{
-  static Node encode(const Area& rhs)
-  {
-    Node node;
-    node["name"] = rhs.name;
-    node["override"] = rhs.override;
-    if (rhs.corners.size()>0)
-    {
-      node["corners"] = rhs.corners;
-    }
-    else
-    {
-      node["radius"] = rhs.radius;
-    }
-    return node;
-  }
-
-  static bool decode(const Node& node, Area& rhs)
-  {
-    if (!node.IsMap() || !node["name"] || !node["override"])
-    {
-      return false;
-    }
-    rhs.name = node["name"].as<std::string>();
-    rhs.override = node["override"].as<double>();
-    if (node["corners"])
-    {
-      rhs.corners = node["corners"].as<std::vector<std::vector<double>>>();
-    }
-    else if (node["radius"])
-    {
-      rhs.radius = node["radius"].as<double>();
-    }
-    else
-    {
-      return false;
-    }
-    return true;
-  }
-};
-}  // namespace YAML
-
 class SsmFixedAreasNode :  public SsmBaseNode
 {
 protected:
@@ -99,7 +42,12 @@ protected:
   ssm15066::FixedAreasSSMPtr ssm_;
   std::string areas_param_ns_;
 
+  std::map<std::string,SignalHandlerPtr> signals_;
+
+
   bool loadAreas();
+
+  bool loadSignals();
 
 public:
 

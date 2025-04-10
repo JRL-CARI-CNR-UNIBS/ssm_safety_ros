@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2020, Marco Faroni
+Copyright (c) 2025, Marco Faroni
 Poitecnico di Milano
 All rights reserved.
 
@@ -28,129 +28,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "ssm_safety_ros/ssm_ros_base_node_library.h"
 
-HumanPoseNotifier::HumanPoseNotifier(const std::string& base_frame, const tf2_ros::Buffer::SharedPtr& tf_buffer)
-{
-  base_frame_ = base_frame;
-  tf_buffer_ = tf_buffer;
-}
-
-bool HumanPoseNotifier::is_a_new_data_available()
-{
-  return new_data_available_;
-}
-
-bool HumanPoseNotifier::was_first_pose_received()
-{
-  return first_msg_received_;
-}
-
-bool HumanPoseNotifier::get_data(Eigen::Matrix<double,3,Eigen::Dynamic>& pc_in_b)
-{
-  if (!new_data_available_)
-  {
-    return false;
-  }
-  pc_in_b = pc_in_b_;
-  new_data_available_ = false;
-  return true;
-}
-
-void HumanPoseNotifier::callback(const geometry_msgs::msg::PoseArray::SharedPtr msg)
-{
-  first_msg_received_=true;
-
-  Eigen::Affine3d T_base_camera;
-  T_base_camera.setIdentity();
-  geometry_msgs::msg::TransformStamped location_transform;
-  tf2::TimePoint t0 = tf2::TimePointZero;
-
-
-  if (msg->header.frame_id.compare(base_frame_))
-  {
-    bool success {true};
-    for (size_t itrial=0;itrial<50;itrial++)
-    {
-      try
-      {
-        location_transform = tf_buffer_->lookupTransform(base_frame_.c_str(), msg->header.frame_id, t0, tf2::Duration(std::chrono::milliseconds(5000)));
-      }
-      catch (tf2::LookupException ex)
-      {
-        fprintf(stderr, "[WARNING] Timeout: Unable to find a transform from %s to %s\n", base_frame_.c_str(), msg->header.frame_id.c_str());
-        fprintf(stderr, "[WARNING] %s", ex.what());
-        success = false;
-      }
-      catch(std::exception ex)
-      {
-        fprintf(stderr, "[WARNING] Unable to find a transform from %s to %s\n", base_frame_.c_str(), msg->header.frame_id.c_str());
-        fprintf(stderr, "[WARNING] %s", ex.what());
-        success = false;
-      }
-      if (success)
-        break;
-
-      rclcpp::sleep_for(std::chrono::milliseconds(100));
-    }
-
-    if(success)
-    {
-      T_base_camera = tf2::transformToEigen(location_transform);
-    }
-
-  }
-  else
-  {
-    location_transform = tf2::eigenToTransform(T_base_camera);
-  }
-
-  pc_in_b_.resize(3,msg->poses.size());
-  for (size_t ip=0;ip<msg->poses.size();ip++)
-  {
-    Eigen::Vector3d point_in_c;
-    point_in_c(0)=msg->poses.at(ip).position.x;
-    point_in_c(1)=msg->poses.at(ip).position.y;
-    point_in_c(2)=msg->poses.at(ip).position.z;
-    pc_in_b_.col(ip)=T_base_camera*point_in_c;
-  }
-
-#if 0
-  tf2_ros::StampedTransform tf_base_camera;
-
-  if (msg->header.frame_id.compare(base_frame_))
-  {
-
-    if (not listener.waitForTransform(base_frame_.c_str(),msg->header.frame_id,msg->header.stamp,rclcpp::Duration(0.01)))
-    {
-      ROS_ERROR_THROTTLE(1,"Poses topic has wrong frame, %s instead of %s. No TF available",poses.header.frame_id.c_str(),base_frame_.c_str());
-      error=true;
-    }
-    else
-    {
-      listener.lookupTransform(base_frame_,msg->header.frame_id,msg->header.stamp,tf_base_camera);
-      tf::poseTFToEigen(tf_base_camera,T_base_camera);
-    }
-  }
-  else
-  {
-    tf::poseEigenToTF(T_base_camera,tf_base_camera);
-  }
-
-  pc_in_b_.resize(3,msg->poses.size());
-  for (size_t ip=0;ip<msg->poses.size();ip++)
-  {
-    Eigen::Vector3d point_in_c;
-    point_in_c(0)=msg->poses.at(ip).position.x;
-    point_in_c(1)=msg->poses.at(ip).position.y;
-    point_in_c(2)=msg->poses.at(ip).position.z;
-    pc_in_b_.col(ip)=T_base_camera*point_in_c;
-  }
-#endif
-  new_data_available_ = true;
-}
-
 SsmBaseNode::SsmBaseNode(std::string name): rclcpp::Node(name)
 {
   params_ns_ = "/"+name+"/";
+  js_topic_ = "/joint_states";
 }
 
 bool SsmBaseNode::init()
@@ -175,6 +56,7 @@ bool SsmBaseNode::init()
   {
     RCLCPP_WARN(this->get_logger(), "could not load parameter time_remove_old_objects. default = %f. (%s)", time_remove_old_objects_, what.c_str());
   }
+
   //if (!cnr::param::get(params_ns+"publish_obstacles", publish_obstacles, what))
   //{
   //  RCLCPP_WARN(this->get_logger(), "parameter publish_obstacles undefined. default = %f. (%s)", publish_obstacles);
@@ -187,10 +69,51 @@ bool SsmBaseNode::init()
   pos_ovr_change_=0.25*sampling_time_;
   neg_ovr_change_=2.0*sampling_time_;
 
+  RCLCPP_INFO(this->get_logger(), "creating rosdyn chain");
+
+  // create kinematic chain
+  rclcpp::Node::SharedPtr nh = shared_from_this();
+  robot_description_reader_ = std::make_shared<RobotDescriptionReader>();
+  std::string robot_description;
+  if (!robot_description_reader_->get_robot_description(nh,robot_description))
+  {
+    RCLCPP_FATAL(this->get_logger(), "could not find robot description. FAILED.");
+    return false;
+  }
+
+  Eigen::Vector3d grav;
+  grav << 0, 0, -9.806;
+
+  urdf::ModelInterfaceSharedPtr model = urdf::parseURDF(robot_description);
+
+  if(model == nullptr)
+  {
+    RCLCPP_FATAL(this->get_logger(), "Cannot load robot_description!");
+    return false;
+  }
+  RCLCPP_INFO(this->get_logger(), "urdf model ok");
+
+  chain_ = rdyn::createChain(*model, base_frame_, tool_frame_, grav);
+  if (!chain_)
+  {
+    RCLCPP_FATAL_STREAM(this->get_logger(), "Unable to create a chain between " << base_frame_ << " and " << tool_frame_);
+    return false;
+  }
+
+  joint_names_ = chain_->getMoveableJointNames();
+  nAx_ = joint_names_.size();
+
+  test_links_ = chain_->getLinksName();
+  if (!cnr::param::get(params_ns_+"test_links", test_links_, what))
+  {
+    RCLCPP_WARN(this->get_logger(), "could not load parameter dynamic_ssm/test_links. default = ALL. (%s)", what.c_str());
+  }
+
+  RCLCPP_INFO(this->get_logger(), "rosdyn chain initialized");
+
   // init tf buffer
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
   tf_listener_  = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-
 
   ovr_pub_ = this->create_publisher<std_msgs::msg::Int16>("/speed_ovr",1);
   ovr_float_pub_ = this->create_publisher<std_msgs::msg::Float32>("/speed_ovr_float",1);
@@ -198,9 +121,11 @@ bool SsmBaseNode::init()
   dist_pub_ = this->create_publisher<std_msgs::msg::Float32>("/min_distance_from_poses",1);
   dist_float64_pub_ = this->create_publisher<std_msgs::msg::Float64>("/min_distance_from_poses_float64",1);
 
+  // create subscribers
   obstacle_notifier_ = std::make_shared<HumanPoseNotifier>(base_frame_, tf_buffer_);
-  // CHECK THIS
   obstacle_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>("/poses", 1, std::bind(&HumanPoseNotifier::callback, obstacle_notifier_, std::placeholders::_1));
+  js_notif_ = std::make_shared<JointStateNotifier>(nAx_,joint_names_);
+  js_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(js_topic_, 1, std::bind(&JointStateNotifier::callback, js_notif_, std::placeholders::_1));
 
   RCLCPP_INFO(this->get_logger(), "ssm_base_node initialized");
 

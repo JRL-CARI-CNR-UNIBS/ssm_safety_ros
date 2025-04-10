@@ -39,9 +39,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 class SsmFixedDistanceNode :  public SsmFixedAreasNode
 {
 protected:
-
-  Eigen::Vector2d robot_in_b_pos_xy_;
-
 public:
 
   SsmFixedDistanceNode(std::string name);

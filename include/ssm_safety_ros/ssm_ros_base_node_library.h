@@ -32,59 +32,35 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rclcpp/rclcpp.hpp>
 #include <Eigen/Dense>
 
-#include <std_msgs/msg/float32.hpp>
-#include <std_msgs/msg/float64.hpp>
-#include <std_msgs/msg/int16.hpp>
-#include <geometry_msgs/msg/pose_array.hpp>
-#include <geometry_msgs/msg/transform_stamped.hpp>
+#include "ssm_safety_ros/common.h"
 
-#include <tf2_ros/transform_listener.h>
-#include <tf2_eigen/tf2_eigen.hpp>
+#include <rdyn_core/primitives.h>
+#include <urdf_model/model.h>
+#include <urdf_parser/urdf_parser.h>
 
-#include <cnr_param/cnr_param.h>
-
-
-class HumanPoseNotifier
-{
-protected:
-  bool new_data_available_{false};
-  bool first_msg_received_{false};
-  Eigen::Matrix<double,3,Eigen::Dynamic> pc_in_b_;
-  tf2_ros::Buffer::SharedPtr tf_buffer_;
-  std::string base_frame_;
-
-public:
-
-  HumanPoseNotifier(const std::string& base_frame, const tf2_ros::Buffer::SharedPtr& tf_buffer);
-
-  bool is_a_new_data_available();
-
-  bool was_first_pose_received();
-
-  bool get_data(Eigen::Matrix<double,3,Eigen::Dynamic>& pc_in_b);
-
-  void callback(const geometry_msgs::msg::PoseArray::SharedPtr msg);
-
-  tf2_ros::Buffer::SharedPtr get_tf_buffer(){return tf_buffer_;};
-
-};
-using HumanPoseNotifierPtr = std::shared_ptr<HumanPoseNotifier>;
 
 class SsmBaseNode :  public rclcpp::Node
 {
 protected:
 
   std::string params_ns_;
+  std::string js_topic_;
 
   double sampling_time_{0.02};
   std::string base_frame_;
   std::string tool_frame_;
+  std::vector<std::string> test_links_;
   // std::string sphere_radius_;
-  double time_remove_old_objects_{0.5};
 
+  // kinematic chain and joint state subscriber
+  RobotDescriptionReaderPtr robot_description_reader_;
+  rdyn::ChainPtr chain_;
+  std::vector<std::string> joint_names_;
+  size_t nAx_;
+
+  double time_remove_old_objects_{0.5};
   double last_ovr_{0.0};
   rclcpp::Time last_pose_topic_; // = rclcpp::Time(0);
-  HumanPoseNotifierPtr obstacle_notifier_;
 
   std_msgs::msg::Int16 ovr_msg_int_;
   std_msgs::msg::Float32 ovr_msg_float32_;
@@ -104,6 +80,9 @@ protected:
   //rclcpp::WallRate lp(1.0/st);
 
   // publisher and subscibers
+  JointStateNotifierPtr js_notif_;
+  HumanPoseNotifierPtr obstacle_notifier_;
+  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr js_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr obstacle_sub_;
   rclcpp::Publisher<std_msgs::msg::Int16>::SharedPtr ovr_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr ovr_float_pub_;

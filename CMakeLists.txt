@@ -20,6 +20,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(name_sorting REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(rdyn_core REQUIRED)
 find_package(Eigen3 REQUIRED COMPONENTS Core)
 find_package(velocity_scaling_iso15066 REQUIRED)
@@ -28,16 +29,19 @@ find_package(cnr_param REQUIRED)
 
 # CREATE PKG LIBRARY
 add_library(${PROJECT_NAME} SHARED
+    src/${PROJECT_NAME}/common.cpp
     src/${PROJECT_NAME}/ssm_ros_base_node_library.cpp
     src/${PROJECT_NAME}/ssm_ros_dynamic_node_library.cpp
     src/${PROJECT_NAME}/ssm_ros_fixed_areas_node_library.cpp
     src/${PROJECT_NAME}/ssm_ros_fixed_distance_node_library.cpp
+    src/${PROJECT_NAME}/ssm_ros_signals_node_library.cpp
     )
 ament_target_dependencies(${PROJECT_NAME}
     rclcpp
     tf2_ros
     tf2_eigen
     std_msgs
+    std_srvs
     geometry_msgs 
     sensor_msgs
     trajectory_msgs
@@ -59,6 +63,7 @@ ament_export_dependencies(
     trajectory_msgs
     name_sorting
     std_msgs
+    std_srvs
     rdyn_core
     Eigen3
     velocity_scaling_iso15066
@@ -104,6 +109,25 @@ target_include_directories(ssm_safety_node PUBLIC
 target_compile_features(ssm_safety_node PUBLIC c_std_99 cxx_std_17)
 install(TARGETS ssm_safety_node
     DESTINATION lib/${PROJECT_NAME})
+
+# NODE (SIGNALS)
+
+add_executable(ssm_safety_from_signals_node
+    src/ssm_safety_signals_node.cpp
+    )
+ament_target_dependencies(ssm_safety_from_signals_node
+    rclcpp
+    )
+target_link_libraries(ssm_safety_from_signals_node
+    ${PROJECT_NAME}
+    )
+target_include_directories(ssm_safety_from_signals_node PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+target_compile_features(ssm_safety_from_signals_node PUBLIC c_std_99 cxx_std_17)
+install(TARGETS ssm_safety_from_signals_node
+    DESTINATION lib/${PROJECT_NAME})
+
 
 install(DIRECTORY launch config
     DESTINATION share/${PROJECT_NAME})

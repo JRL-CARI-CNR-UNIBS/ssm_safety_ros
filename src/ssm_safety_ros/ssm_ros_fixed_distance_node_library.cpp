@@ -32,7 +32,6 @@ SsmFixedDistanceNode::SsmFixedDistanceNode(std::string name):
   SsmFixedAreasNode(name)
 {
   areas_param_ns_="fixed_distance";
-  robot_in_b_pos_xy_.setZero();
 }
 
 bool SsmFixedDistanceNode::init()
@@ -41,14 +40,15 @@ bool SsmFixedDistanceNode::init()
     return false;
 
   // create SSM scaling calculator
-  ssm_ = std::make_shared<ssm15066::FixedDistanceSSM>();
+  ssm_ = std::make_shared<ssm15066::FixedDistanceSSM>(chain_);
+  ssm_->setCheckedRobotLinks(test_links_);
   ssm_->init();
   ssm_->setPointCloud(pc_in_b_pos_,pc_in_b_vel_);
 
   loadAreas();
   ssm_->printAreas();
 
-  RCLCPP_INFO(this->get_logger(), "ssm_fixed_areas_node initialized");
+  RCLCPP_INFO(this->get_logger(), "ssm_fixed_distance initialized");
 
   return true;
 }
@@ -56,29 +56,38 @@ bool SsmFixedDistanceNode::init()
 void SsmFixedDistanceNode::spin()
 {
 
-  // downcasting to child class to use child method setRobotToolPosition()
-  ssm15066::FixedDistanceSSMPtr ssm_child = std::static_pointer_cast<ssm15066::FixedDistanceSSM>(ssm_);
+  Eigen::VectorXd q(nAx_);
+  Eigen::VectorXd dq(nAx_);
+  q.setZero();
+  dq.setZero();
+  std::vector<double> pos(nAx_);
+  std::vector<double> vel(nAx_);
 
-  Eigen::VectorXd q;
-  Eigen::VectorXd dq;
-
-  int iter = 0;
   rclcpp::WallRate lp(1.0/sampling_time_);
   while (rclcpp::ok())
   {
     rclcpp::spin_some(this->get_node_base_interface());
 
-    iter++;
+    if (js_notif_->is_a_new_data_available())
+    {
+      js_notif_->get_data(pos, vel);
+      for (unsigned int iax=0;iax<nAx_;iax++)
+      {
+        q(iax)=pos.at(iax);
+        dq(iax)=vel.at(iax);
+      }
+    }
 
     if (obstacle_notifier_->is_a_new_data_available())
     {
       RCLCPP_DEBUG(this->get_logger(),"poses received correctly");
 
       obstacle_notifier_->get_data(pc_in_b_pos_);
-      ssm_child->setPointCloud(pc_in_b_pos_, pc_in_b_vel_);
+      ssm_->setPointCloud(pc_in_b_pos_, pc_in_b_vel_);
 
       last_pose_topic_ = rclcpp::Clock{}.now();
 
+      #if 0
       // compute transformation from base_frame to tool_frame
       geometry_msgs::msg::TransformStamped location_transform;
       tf2::TimePoint t0 = tf2::TimePointZero;
@@ -107,7 +116,7 @@ void SsmFixedDistanceNode::spin()
           }
           if (success)
           {
-            RCLCPP_WARN(this->get_logger(),"found tf");
+            RCLCPP_DEBUG(this->get_logger(),"found tf");
             break;
           }
 
@@ -118,10 +127,10 @@ void SsmFixedDistanceNode::spin()
         {
           robot_in_b_pos_xy_(0) = location_transform.transform.translation.x;
           robot_in_b_pos_xy_(1) = location_transform.transform.translation.y;
-          std::cout << "robot pos" << robot_in_b_pos_xy_ << std::endl;
           ssm_child->setRobotToolPosition(robot_in_b_pos_xy_);
         }
       }
+      #endif
     }
 
     // poses is old
@@ -129,18 +138,26 @@ void SsmFixedDistanceNode::spin()
     {
       pc_in_b_pos_.resize(3,0);
       pc_in_b_vel_.resize(3,0);
-      ssm_child->setPointCloud(pc_in_b_pos_,pc_in_b_vel_);
+      ssm_->setPointCloud(pc_in_b_pos_,pc_in_b_vel_);
     }
 
     if (!obstacle_notifier_->was_first_pose_received())
     {
-      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2.0, "poses topic has not been received yet");
+      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "poses topic has not been received yet");
     }
 
+    double ovr=1.0;
+    if (!js_notif_->was_first_msg_received())
+    {
+      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "topic js_topic_ has not been received yet");
+    }
+    else
+    {
+      ovr=ssm_->computeScaling(q,dq);
+    }
 
-    double ovr=ssm_child->computeScaling(q,dq);
     publish_ovr(ovr);
-    publish_distance(ssm_child->getDistanceFromClosestPoint());
+    publish_distance(ssm_->getDistanceFromClosestPoint());
 
     lp.sleep();
 

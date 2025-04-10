@@ -27,100 +27,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "ssm_safety_ros/ssm_ros_dynamic_node_library.h"
-#include "name_sorting/name_sorting.hpp"
 
-bool RobotDescriptionReader::is_available()
+SsmDynamicNode::SsmDynamicNode(std::string name): SsmBaseNode(name)
 {
-  return has_one_available_;
+  js_topic_ = "/unscaled_joint_target";
 }
-
-void RobotDescriptionReader::callback(const std_msgs::msg::String& msg)
-{
-  mtx_.lock();
-  robot_description_ = msg.data;
-  has_one_available_ = true;
-  has_new_available_=true;
-  mtx_.unlock();
-}
-
-bool RobotDescriptionReader::get_robot_description(rclcpp::Node::SharedPtr& node, std::string& robot_description, const double& timeout_secs, const bool& use_stored_urdf_if_available)
-{
-  if (this->is_available() && use_stored_urdf_if_available)
-  {
-    robot_description = robot_description_;
-    return true;
-  }
-
-  has_new_available_ = false;
-  robot_description_sub_ = node->create_subscription<std_msgs::msg::String>("/robot_description", rclcpp::QoS(1).transient_local().reliable(), std::bind(&RobotDescriptionReader::callback, this, std::placeholders::_1));
-
-  auto t0 = rclcpp::Clock{}.now();
-  while (!has_new_available_ && (rclcpp::Clock{}.now() - t0).seconds() <= timeout_secs)
-  {
-    rclcpp::spin_some(node->get_node_base_interface());
-    RCLCPP_WARN_THROTTLE(node->get_logger(), *node->get_clock(), 0.5, "waiting for robot description to come up");
-    rclcpp::sleep_for(std::chrono::milliseconds(100));
-  }
-
-  robot_description_sub_.reset();
-
-  if (has_new_available_)
-  {
-    robot_description = robot_description_;
-    return true;
-  }
-  else if (this->is_available())
-  {
-    robot_description = robot_description_;
-    RCLCPP_ERROR(node->get_logger(), "could not read up-to-date robot description. returning the last available one.");
-  }
-  return false;
-}
-
-
-UnscaledJointTargetNotifier::UnscaledJointTargetNotifier(const size_t& n_joints, const std::vector<std::string>& joint_names)
-{
-  n_joints_ = n_joints;
-  joint_names_ = joint_names;
-  pos_.resize(n_joints_);
-  vel_.resize(n_joints_);
-}
-
-bool UnscaledJointTargetNotifier::is_a_new_data_available()
-{
-  return new_data_available_;
-}
-
-bool UnscaledJointTargetNotifier::was_first_msg_received()
-{
-  return first_msg_received_;
-}
-
-bool UnscaledJointTargetNotifier::get_data(std::vector<double>& pos, std::vector<double>& vel)
-{
-  if (!new_data_available_)
-  {
-    return false;
-  }
-  pos = pos_;
-  vel = vel_;
-  new_data_available_ = false;
-  return true;
-}
-
-void UnscaledJointTargetNotifier::callback(const sensor_msgs::msg::JointState::SharedPtr msg)
-{
-  first_msg_received_=true;
-
-  pos_ = msg->position;
-  vel_ = msg->velocity;
-
-  std::vector<std::string> tmp_names = msg->name;
-  name_sorting::permutationName(joint_names_,tmp_names,pos_,vel_);
-  new_data_available_ = true;
-}
-
-SsmDynamicNode::SsmDynamicNode(std::string name): SsmBaseNode(name){}
 
 bool SsmDynamicNode::init()
 {
@@ -129,45 +40,9 @@ bool SsmDynamicNode::init()
     return false;
   }
 
-  // create kinematic chain
-  rclcpp::Node::SharedPtr nh = shared_from_this();
-  robot_description_reader_ = std::make_shared<RobotDescriptionReader>();
-  std::string robot_description;
-  if (!robot_description_reader_->get_robot_description(nh,robot_description))
-  {
-    RCLCPP_FATAL(this->get_logger(), "could not find robot description. FAILED.");
-    return false;
-  }
-
-  Eigen::Vector3d grav;
-  grav << 0, 0, -9.806;
-
-  urdf::ModelInterfaceSharedPtr model = urdf::parseURDF(robot_description);
-
-  if(model == nullptr)
-  {
-    RCLCPP_FATAL(this->get_logger(), "Cannot load robot_description!");
-    return false;
-  }
-  RCLCPP_INFO(this->get_logger(), "urdf model ok");
-
-  chain_ = rdyn::createChain(*model, base_frame_, tool_frame_, grav);
-  if (!chain_)
-  {
-    RCLCPP_FATAL_STREAM(this->get_logger(), "Unable to create a chain between " << base_frame_ << " and " << tool_frame_);
-    return false;
-  }
-
-  RCLCPP_INFO(this->get_logger(), "rosdyn chain ok");
-
   // get params
   std::string what;
 
-  std::vector<std::string> test_links = chain_->getLinksName();
-  if (!cnr::param::get(params_ns_+"dynamic_ssm/test_links", test_links, what))
-  {
-    RCLCPP_WARN(this->get_logger(), "could not load parameter dynamic_ssm/test_links. default = ALL. (%s)", what.c_str());
-  }
   double max_cart_acc = 0.1;
   if (!cnr::param::get(params_ns_+"dynamic_ssm/maximum_cartesian_acceleration", max_cart_acc, what))
   {
@@ -207,16 +82,10 @@ bool SsmDynamicNode::init()
   ssm_->setMinProtectiveDistance(min_protective_dist);
   ssm_->setFilteringSelfDistance(min_filtered_dist);
   ssm_->useMeasuredHumanVelocity(measure_human_speed);
-  ssm_->setCheckedRobotLinks(test_links);
+
+  ssm_->setCheckedRobotLinks(test_links_);
   ssm_->init();
   ssm_->setPointCloud(pc_in_b_pos_,pc_in_b_vel_);
-
-  joint_names_ = chain_->getMoveableJointNames();
-  nAx_ = joint_names_.size();
-
-  // create subscribers
-  js_notif_ = std::make_shared<UnscaledJointTargetNotifier>(nAx_,joint_names_);
-  js_sub_ = this->create_subscription<sensor_msgs::msg::JointState>("/unscaled_joint_target", 1, std::bind(&UnscaledJointTargetNotifier::callback, js_notif_, std::placeholders::_1));
 
   RCLCPP_INFO(this->get_logger(), "ssm_dynamic_node initialized");
 
@@ -232,7 +101,7 @@ void SsmDynamicNode::spin()
   std::vector<double> pos(nAx_);
   std::vector<double> vel(nAx_);
 
-  int iter = 0;
+  // int iter = 0;
   rclcpp::WallRate lp(1.0/sampling_time_);
   while (rclcpp::ok())
   {
@@ -248,6 +117,7 @@ void SsmDynamicNode::spin()
       }
     }
 
+    #if 0
     /* Print links and poses for debug */
     if (iter==500 || iter==0)
     {
@@ -292,6 +162,7 @@ void SsmDynamicNode::spin()
       iter=1;
     }
     iter++;
+    #endif
 
     if (obstacle_notifier_->is_a_new_data_available())
     {
@@ -358,12 +229,12 @@ void SsmDynamicNode::spin()
 
     if (!obstacle_notifier_->was_first_pose_received())
     {
-      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2.0, "poses topic has not been received yet");
+      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "poses topic has not been received yet");
     }
 
     if (!js_notif_->was_first_msg_received())
     {
-      RCLCPP_INFO(this->get_logger(),"unscaled joint target topic has not been received yet");
+      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "topic js_topic_ has not been received yet");
     }
     else
     {
