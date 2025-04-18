@@ -52,7 +52,7 @@ bool SsmFixedAreasNode::init()
   bool activate_on_signal=false;
   if (!cnr::param::get(params_ns_+areas_param_ns_+"/activate_on_signals", activate_on_signal, what))
   {
-    RCLCPP_INFO_STREAM(this->get_logger(), "could not load parameter fixed_areas/activate_on_signal. Default: false." << what);
+    RCLCPP_INFO_STREAM(this->get_logger(), "could not load parameter fixed_areas/activate_on_signals. Default: false." << what);
   }
 
   // create SSM scaling calculator
@@ -127,7 +127,10 @@ void SsmFixedAreasNode::spin()
     {
       for (const auto& signal: signals_)
       {
-        ssm_->updateSignal(signal.first, signal.second->is_active());
+        if (!ssm_->updateSignal(signal.first, signal.second->is_active()))
+        {
+          RCLCPP_WARN_STREAM(this->get_logger(),"Could not update signal " << signal.first << " correctly");
+        }
       }
     }
 

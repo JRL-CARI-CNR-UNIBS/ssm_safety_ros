@@ -184,9 +184,8 @@ struct convert<Signal>
 class SignalHandler
 {
 protected:
-  bool new_data_available_{false};
-  bool first_msg_received_{false};
   bool is_active_{false};
+  bool is_alive_{false};
 
   Signal signal_;
   rclcpp::Node::SharedPtr node_;
@@ -204,11 +203,7 @@ public:
 
   }
 
-  bool is_a_new_data_available(){};
-
-  bool was_first_msg_received(){};
-
-  bool get_data(){};
+  bool is_alive(){return is_alive_;};
 
   virtual void init()
   {
@@ -220,7 +215,10 @@ public:
 
   };
 
-  virtual bool is_active(){return (signal_.normally_closed & is_active_);}
+  virtual bool is_active()
+  {
+    return (signal_.normally_closed != is_active_); // logical XOR
+  }
 
   //void callback(const geometry_msgs::msg::PoseArray::SharedPtr msg);
 
@@ -244,19 +242,16 @@ public:
     SignalHandler(signal, node),
     min_period_(rclcpp::Duration::from_seconds(signal_.sampling_time))
   {
-    client_ = node_->create_client<std_srvs::srv::Trigger>("trigger_service_1");
+    client_ = node_->create_client<std_srvs::srv::Trigger>(signal_.channel);
+    last_call_time_ = node_->now();
     std::cout << "srv handler created !" << std::endl;
   }
 
-  bool isActive()
+  bool is_active()
   {
-    std::cout << "ciao" << std::endl;
-
-    std::cout << "srv sampling time:" << min_period_.seconds() << std::endl;
-
     rclcpp::Time now = node_->now();
 
-    if (!service_exists_)
+    if (!is_alive_)
     {
       if (!client_->wait_for_service(1s))
       {
@@ -264,7 +259,7 @@ public:
       }
       else
       {
-        service_exists_ = true;
+        is_alive_ = true;
       }
     }
     else if ((now - last_call_time_) >= min_period_)
@@ -273,17 +268,17 @@ public:
       auto future = client_->async_send_request(request);
       last_call_time_ = now;
 
-      try
+      if (rclcpp::spin_until_future_complete(this->node_, future) ==
+          rclcpp::FutureReturnCode::SUCCESS)
       {
-        auto response = future.get();  // Blocks until response
-        is_active_ = response->success;
-        std::cout << "Response: data = " << response->success << ", msg = " << response->message << std::endl;
+        auto result = *future.get();
+        is_active_ = result.success;
+        std::cout << "Response: data = " << result.success << ", msg = " << result.message << std::endl;
       }
-      catch (const std::exception &e)
+      else
       {
-        std::cerr << "Service call failed"  << e.what() << std::endl;
+        std::cerr << "Service call failed" << std::endl;
       }
-
     }
     return this->SignalHandler::is_active();
   }
@@ -293,7 +288,6 @@ protected:
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::Time last_call_time_;
   rclcpp::Duration min_period_;
-  bool service_exists_{false};
 
 };
 
