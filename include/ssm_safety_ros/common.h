@@ -178,9 +178,6 @@ struct convert<Signal>
 };
 }  // namespace YAML
 
-// TODO: fare in modo che is_active() ritorni il fatto che il segnale sia attivo o meno
-// creare subscriber e service clients e gestire la frequenza di campionamento
-
 class SignalHandler
 {
 protected:
@@ -193,34 +190,10 @@ protected:
 
 public:
 
-  SignalHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node):
-    signal_(signal), node_(node)
-  {
-    std::cout << "name: " << signal_.name << std::endl;
-    std::cout << "channel: " << signal_.channel << std::endl;
-    std::cout << "interface: " << signal_.interface << std::endl;
-    std::cout << "st: " << signal_.sampling_time << std::endl;
-
-  }
-
-  bool is_alive(){return is_alive_;};
-
-  virtual void init()
-  {
-    std::cout << "init: " << std::endl;
-    std::cout << "name: " << signal_.name << std::endl;
-    std::cout << "channel: " << signal_.channel << std::endl;
-    std::cout << "interface: " << signal_.interface << std::endl;
-    std::cout << "st: " << signal_.sampling_time << std::endl;
-
-  };
-
-  virtual bool is_active()
-  {
-    return (signal_.normally_closed != is_active_); // logical XOR
-  }
-
-  //void callback(const geometry_msgs::msg::PoseArray::SharedPtr msg);
+  SignalHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node);
+  bool is_alive();
+  virtual void init();
+  virtual bool is_active();
 
 };
 using SignalHandlerPtr = std::shared_ptr<SignalHandler>;
@@ -228,61 +201,15 @@ using SignalHandlerPtr = std::shared_ptr<SignalHandler>;
 class TopicHandler : public SignalHandler
 {
 public:
-  TopicHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node):
-    SignalHandler(signal, node)
-  {
-    std::cout << "topic handler created!" << std::endl;
-  }
+  TopicHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node);
 };
 
 class ServiceHandler : public SignalHandler
 {
 public:
-  ServiceHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node):
-    SignalHandler(signal, node),
-    min_period_(rclcpp::Duration::from_seconds(signal_.sampling_time))
-  {
-    client_ = node_->create_client<std_srvs::srv::Trigger>(signal_.channel);
-    last_call_time_ = node_->now();
-    std::cout << "srv handler created !" << std::endl;
-  }
 
-  bool is_active()
-  {
-    rclcpp::Time now = node_->now();
-
-    if (!is_alive_)
-    {
-      if (!client_->wait_for_service(1s))
-      {
-        std::cerr << "Service not available" << std::endl;
-      }
-      else
-      {
-        is_alive_ = true;
-      }
-    }
-    else if ((now - last_call_time_) >= min_period_)
-    {
-      auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
-      auto future = client_->async_send_request(request);
-      last_call_time_ = now;
-
-      if (rclcpp::spin_until_future_complete(this->node_, future, std::chrono::nanoseconds(5*min_period_.nanoseconds())) ==
-          rclcpp::FutureReturnCode::SUCCESS)
-      {
-        auto result = *future.get();
-        is_active_ = result.success;
-        std::cout << "Response: data = " << result.success << ", msg = " << result.message << std::endl;
-      }
-      else
-      {
-        std::cerr << "Service call failed" << std::endl;
-        is_alive_ = false;
-      }
-    }
-    return this->SignalHandler::is_active();
-  }
+  ServiceHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node);
+  bool is_active();
 
 protected:
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_;

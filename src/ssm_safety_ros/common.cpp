@@ -28,6 +28,88 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "ssm_safety_ros/common.h"
 
+SignalHandler::SignalHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node):
+  signal_(signal), node_(node)
+{
+  std::cout << "name: " << signal_.name << std::endl;
+  std::cout << "channel: " << signal_.channel << std::endl;
+  std::cout << "interface: " << signal_.interface << std::endl;
+  std::cout << "st: " << signal_.sampling_time << std::endl;
+
+}
+
+bool SignalHandler::is_alive(){return is_alive_;}
+
+void SignalHandler::init()
+{
+  std::cout << "init: " << std::endl;
+  std::cout << "name: " << signal_.name << std::endl;
+  std::cout << "channel: " << signal_.channel << std::endl;
+  std::cout << "interface: " << signal_.interface << std::endl;
+  std::cout << "st: " << signal_.sampling_time << std::endl;
+}
+
+bool SignalHandler::is_active()
+{
+  return (signal_.normally_closed != is_active_); // logical XOR
+}
+
+
+TopicHandler::TopicHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node):
+  SignalHandler(signal, node)
+{
+  std::cout << "TO BE IMPLEMENTED" << std::endl;
+}
+
+ServiceHandler::ServiceHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node):
+  SignalHandler(signal, node),
+  min_period_(rclcpp::Duration::from_seconds(signal_.sampling_time))
+{
+  client_ = node_->create_client<std_srvs::srv::Trigger>(signal_.channel);
+  last_call_time_ = node_->now();
+  std::cout << "srv handler created !" << std::endl;
+}
+
+bool ServiceHandler::is_active()
+{
+  rclcpp::Time now = node_->now();
+
+  if (!is_alive_)
+  {
+    if (!client_->wait_for_service(1s))
+    {
+      std::cerr << "Service not available" << std::endl;
+    }
+    else
+    {
+      is_alive_ = true;
+    }
+  }
+  else if ((now - last_call_time_) >= min_period_)
+  {
+    auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+    auto future = client_->async_send_request(request);
+    last_call_time_ = now;
+
+    if (rclcpp::spin_until_future_complete(this->node_, future, std::chrono::nanoseconds(5*min_period_.nanoseconds())) ==
+        rclcpp::FutureReturnCode::SUCCESS)
+    {
+      auto result = *future.get();
+      is_active_ = result.success;
+      std::cout << "Response: data = " << result.success << ", msg = " << result.message << std::endl;
+    }
+    else
+    {
+      std::cerr << "Service call failed" << std::endl;
+      is_alive_ = false;
+    }
+  }
+  return this->SignalHandler::is_active();
+}
+
+
+
+
 bool RobotDescriptionReader::is_available()
 {
   return has_one_available_;
