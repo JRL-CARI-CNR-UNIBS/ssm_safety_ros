@@ -268,7 +268,7 @@ public:
       auto future = client_->async_send_request(request);
       last_call_time_ = now;
 
-      if (rclcpp::spin_until_future_complete(this->node_, future) ==
+      if (rclcpp::spin_until_future_complete(this->node_, future, std::chrono::nanoseconds(5*min_period_.nanoseconds())) ==
           rclcpp::FutureReturnCode::SUCCESS)
       {
         auto result = *future.get();
@@ -278,6 +278,7 @@ public:
       else
       {
         std::cerr << "Service call failed" << std::endl;
+        is_alive_ = false;
       }
     }
     return this->SignalHandler::is_active();
