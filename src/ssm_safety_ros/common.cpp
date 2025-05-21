@@ -56,9 +56,40 @@ bool SignalHandler::is_active()
 
 
 TopicHandler::TopicHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node):
-  SignalHandler(signal, node)
+  SignalHandler(signal, node),
+  min_period_(rclcpp::Duration::from_seconds(signal_.sampling_time))
 {
-  std::cout << "TO BE IMPLEMENTED" << std::endl;
+  subscriber_ = node_->create_subscription<std_msgs::msg::Bool>(
+        signal_.channel, 10, std::bind(&TopicHandler::TopicCallback, this, std::placeholders::_1));
+  last_call_time_ = node_->now();
+  std::cout << "topic handler created!" << std::endl;
+}
+
+void TopicHandler::TopicCallback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+  is_active_ = msg->data;
+  is_new_data_available_ = true;
+}
+
+bool TopicHandler::is_active()
+{
+  is_active_ = false;
+
+  rclcpp::Time now = node_->now();
+  if ((now - last_call_time_) >= min_period_)
+  {
+    rclcpp::spin_some(node_->get_node_base_interface());
+    if (is_new_data_available_)
+    {
+      std::cout << "Response: data = " << is_active_ << std::endl;
+      is_new_data_available_ = false;
+    }
+    else
+    {
+      std::cerr << "Did not receive any new message" << std::endl;
+    }
+  }
+  return this->SignalHandler::is_active();
 }
 
 ServiceHandler::ServiceHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node):
@@ -67,7 +98,7 @@ ServiceHandler::ServiceHandler(const Signal& signal, const rclcpp::Node::SharedP
 {
   client_ = node_->create_client<std_srvs::srv::Trigger>(signal_.channel);
   last_call_time_ = node_->now();
-  std::cout << "srv handler created !" << std::endl;
+  std::cout << "srv handler created!" << std::endl;
 }
 
 bool ServiceHandler::is_active()

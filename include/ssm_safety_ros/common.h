@@ -35,6 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/int16.hpp>
+#include <std_msgs/msg/bool.hpp>
 
 #include <std_msgs/msg/string.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
@@ -202,6 +203,15 @@ class TopicHandler : public SignalHandler
 {
 public:
   TopicHandler(const Signal& signal, const rclcpp::Node::SharedPtr& node);
+  bool is_active();
+
+protected:
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr subscriber_;
+  rclcpp::Time last_call_time_;
+  rclcpp::Duration min_period_;
+  bool is_new_data_available_{false};
+  void TopicCallback(const std_msgs::msg::Bool::SharedPtr msg);
+
 };
 
 class ServiceHandler : public SignalHandler
@@ -213,7 +223,6 @@ public:
 
 protected:
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_;
-  rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::Time last_call_time_;
   rclcpp::Duration min_period_;
 
