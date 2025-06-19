@@ -29,7 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ssm_safety_ros/ssm_ros_fixed_areas_node_library.h"
 
 SsmFixedAreasNode::SsmFixedAreasNode(std::string name):
-  SsmBaseNode(name), areas_param_ns_("fixed_areas")
+  SsmBaseNode(name), areas_param_ns_("fixed_areas/")
 {}
 
 bool SsmFixedAreasNode::init()
@@ -40,19 +40,28 @@ bool SsmFixedAreasNode::init()
   // get params
   std::string what;
   bool activate_on_human=true;
-  if (!cnr::param::get(params_ns_+areas_param_ns_+"/activate_on_human", activate_on_human, what))
+  if (!cnr::param::get(params_ns_+areas_param_ns_+"activate_on_human", activate_on_human, what))
   {
     RCLCPP_INFO_STREAM(this->get_logger(), "could not load parameter fixed_areas/activate_on_human. Default: true." << what);
   }
   bool activate_on_robot=false;
-  if (!cnr::param::get(params_ns_+areas_param_ns_+"/activate_on_robot", activate_on_robot, what))
+  if (!cnr::param::get(params_ns_+areas_param_ns_+"activate_on_robot", activate_on_robot, what))
   {
     RCLCPP_INFO_STREAM(this->get_logger(), "could not load parameter fixed_areas/activate_on_robot. Default: false." << what);
   }
   bool activate_on_signal=false;
-  if (!cnr::param::get(params_ns_+areas_param_ns_+"/activate_on_signals", activate_on_signal, what))
+  if (!cnr::param::get(params_ns_+areas_param_ns_+"activate_on_signals", activate_on_signal, what))
   {
     RCLCPP_INFO_STREAM(this->get_logger(), "could not load parameter fixed_areas/activate_on_signals. Default: false." << what);
+  }
+  std::string areas_reference_frame=base_frame_;
+  if (!cnr::param::get(params_ns_+areas_param_ns_+"areas_reference_frame", areas_reference_frame, what))
+  {
+    RCLCPP_INFO(this->get_logger(), "could not load parameter /areas_reference_frame. Default is equal to base_frame (%s), %s", base_frame_.c_str(), what.c_str());
+  }
+  if (areas_reference_frame.compare(base_frame_)!=0)
+  {
+    obstacle_notifier_.reset(new HumanPoseNotifier(areas_reference_frame, tf_buffer_));
   }
 
   // create SSM scaling calculator
